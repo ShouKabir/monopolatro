@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rent Racket — Prototype</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Space+Grotesk:wght@400;500;600&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #16141F;
+  --bg-panel: #211D2E;
+  --bg-panel-2: #2A2438;
+  --ink: #F3EFE6;
+  --ink-dim: #B0A7C0;
+  --gold: #E8B34D;
+  --gold-soft: #F2C14E;
+  --line: rgba(232,179,77,0.16);
+  --house: #4CAF6D;
+  --hotel: #E0483F;
+}
+
+html, body { height: 100%; }
+.is-hidden { display: none; }
+
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 50% 0%, rgba(122,92,194,0.14), transparent 55%),
+    repeating-linear-gradient(135deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
+  color: var(--ink);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ---------- Ledger bar ---------- */
+.ledger-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+  padding: 16px 28px;
+  background: linear-gradient(180deg, var(--bg-panel), var(--bg-panel-2));
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; flex-direction: column; }
+.brand-name { font-family: 'Fredoka', sans-serif; font-weight: 700; font-size: 21px; color: var(--gold-soft); }
+.brand-sub { font-size: 12px; color: var(--ink-dim); font-style: italic; margin-top: 2px; }
+
+.stats { display: flex; gap: 24px; flex-wrap: wrap; }
+.stat { display: flex; flex-direction: column; align-items: center; min-width: 54px; }
+.stat .label { font-size: 11.5px; color: var(--ink-dim); margin-bottom: 2px; }
+.stat .value { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 19px; color: var(--ink); }
+.stat.highlight .value { color: var(--gold-soft); font-size: 22px; }
+
+/* ---------- Table / play area ---------- */
+.table {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; padding: 20px 16px 32px; position: relative;
+}
+
+.banner { min-height: 32px; text-align: center; display: flex; align-items: baseline; gap: 10px; }
+.banner-label { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 19px; color: var(--gold-soft); opacity: 0; }
+.banner-amt { font-size: 14px; color: var(--ink-dim); opacity: 0; }
+.banner.pop .banner-label, .banner.pop .banner-amt { animation: bannerPop 1.5s ease forwards; }
+@keyframes bannerPop {
+  0% { opacity: 0; transform: translateY(6px) scale(0.92); }
+  14% { opacity: 1; transform: translateY(0) scale(1.06); }
+  28% { transform: scale(1); }
+  78% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.score-preview { min-height: 24px; display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.preview-hint { color: var(--ink-dim); }
+.preview-tier { font-weight: 600; }
+.preview-math { color: var(--ink-dim); }
+.preview-math strong { color: var(--gold-soft); }
+
+/* ---------- Hand of cards ---------- */
+.hand-area { position: relative; width: 100%; max-width: 780px; height: 258px; margin-top: 4px; }
+
+.card-slot {
+  position: absolute; left: 50%; top: 6px; width: 124px; margin-left: -62px;
+  transform-origin: bottom center; transition: transform 0.18s ease-out;
+}
+
+.card {
+  --tiltX: 0deg; --tiltY: 0deg; --lift: 0px; --scale: 1;
+  width: 124px; height: 194px; border-radius: 12px;
+  background: linear-gradient(160deg, #2C2640, #211D2E);
+  border: 1px solid rgba(255,255,255,0.07);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.45), 0 2px 4px rgba(0,0,0,0.3);
+  position: relative; overflow: hidden; cursor: pointer;
+  display: flex; flex-direction: column; padding-top: 36px;
+  transform: perspective(700px) rotateX(var(--tiltX)) rotateY(var(--tiltY)) translateY(var(--lift)) scale(var(--scale));
+  transition: transform 0.12s ease-out, box-shadow 0.2s ease-out, border-color 0.2s ease-out, filter 0.2s ease-out;
+}
+.card:hover { --lift: -14px; --scale: 1.035; box-shadow: 0 18px 30px rgba(0,0,0,0.5); }
+.card.selected { --lift: -28px; --scale: 1.06; border-color: var(--gold); box-shadow: 0 20px 34px rgba(0,0,0,0.55), 0 0 0 2px var(--gold), 0 0 22px rgba(232,179,77,0.45); }
+.card.selected:hover { --lift: -33px; }
+.card.inspecting:not(.selected) { box-shadow: 0 10px 20px rgba(0,0,0,0.45), 0 0 0 2px rgba(243,239,230,0.5); }
+.card.mortgaged { filter: grayscale(0.65) brightness(0.72); }
+.card:focus-visible { outline: 2px solid var(--gold-soft); outline-offset: 3px; }
+
+@keyframes cardPop { 0%{transform:scale(1);} 32%{transform:scale(1.09);} 62%{transform:scale(0.97);} 100%{transform:scale(1);} }
+.card.built-pulse { animation: cardPop 0.4s ease; }
+.card.hotel-pulse { animation: cardPop 0.6s ease; box-shadow: 0 0 0 3px var(--gold), 0 0 32px rgba(232,179,77,0.65) !important; }
+
+.card-band { position: absolute; top: 0; left: 0; right: 0; height: 32px; background: var(--band, #666); box-shadow: inset 0 -3px 5px rgba(0,0,0,0.18); }
+.card-check {
+  position: absolute; top: 6px; right: 8px; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--gold); color: #241B0E; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; opacity: 0; transform: scale(0.5);
+  transition: all 0.15s ease-out;
+}
+.card.selected .card-check { opacity: 1; transform: scale(1); }
+
+.card-manage {
+  position: absolute; top: 6px; left: 8px; width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(0,0,0,0.35); color: var(--ink); font-size: 11px; line-height: 1;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 5;
+  transition: background 0.15s ease-out;
+}
+.card-manage:hover { background: rgba(255,255,255,0.28); }
+
+.card-rent { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 23px; margin: 14px 0 2px 14px; color: var(--ink); }
+.card-name { font-size: 11.5px; margin: 0 14px; line-height: 1.25; font-weight: 500; }
+.card-color { font-size: 9.5px; color: var(--ink-dim); margin: 3px 14px 0; letter-spacing: 0.02em; }
+
+.card-strip-wrap { margin-top: auto; padding: 6px 10px 9px; display: flex; align-items: center; min-height: 20px; }
+.card-strip { display: flex; align-items: flex-end; gap: 3px; }
+.card-strip.mortgaged-strip { background: repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 6px, transparent 6px 12px); width: 100%; border-radius: 3px; padding: 2px 5px; }
+.mort-label { font-size: 9px; color: var(--ink-dim); font-style: italic; letter-spacing: 0.02em; }
+
+@keyframes houseGrow { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.house-icon { width: 11px; height: 10px; position: relative; animation: houseGrow 0.3s ease-out; }
+.house-icon::before { content: ''; position: absolute; top: -6px; left: 0; width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 6px solid var(--house); }
+.house-icon::after { content: ''; position: absolute; top: 0; left: 1px; width: 9px; height: 9px; background: var(--house); }
+
+.hotel-icon { width: 19px; height: 14px; position: relative; display: inline-block; animation: houseGrow 0.35s ease-out; }
+.hotel-icon::before { content: ''; position: absolute; top: -7px; left: 1px; width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 8px solid var(--hotel); }
+.hotel-icon::after { content: ''; position: absolute; top: 0; left: 2px; width: 15px; height: 13px; background: var(--hotel); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.16); }
+
+/* ---------- Inspector ---------- */
+.inspector { width: 100%; max-width: 620px; min-height: 50px; display: flex; align-items: center; justify-content: center; margin-top: 2px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.inspector-hint { color: var(--ink-dim); font-size: 12.5px; }
+.inspector-row { display: flex; align-items: center; gap: 12px; width: 100%; }
+.inspector-swatch { width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0; }
+.inspector-text { flex: 1; min-width: 0; }
+.inspector-name { font-weight: 600; font-size: 13.5px; }
+.inspector-meta { font-size: 11.5px; color: var(--ink-dim); margin-top: 1px; }
+
+/* ---------- Controls ---------- */
+.controls { display: flex; gap: 14px; margin-top: 12px; }
+.btn { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14.5px; padding: 13px 26px; border-radius: 10px; border: none; cursor: pointer; transition: transform 0.08s ease, box-shadow 0.15s ease, opacity 0.15s ease; white-space: nowrap; }
+.btn-primary { background: linear-gradient(180deg, var(--gold-soft), var(--gold)); color: #221A0E; box-shadow: 0 4px 0 #A9782A, 0 8px 16px rgba(0,0,0,0.35); }
+.btn-primary:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 #A9782A, 0 4px 8px rgba(0,0,0,0.3); }
+.btn-primary:disabled { opacity: 0.38; cursor: not-allowed; box-shadow: none; }
+.btn-ghost { background: transparent; color: var(--ink); border: 1.5px solid rgba(255,255,255,0.18); }
+.btn-ghost:hover:not(:disabled) { border-color: var(--gold); color: var(--gold-soft); }
+.btn-ghost:disabled { opacity: 0.32; cursor: not-allowed; }
+.btn-sm { padding: 9px 14px; font-size: 12.5px; }
+.btn:focus-visible { outline: 2px solid var(--gold-soft); outline-offset: 2px; }
+
+.hint-line { font-size: 11.5px; color: var(--ink-dim); opacity: 0.75; margin-top: 4px; text-align: center; max-width: 560px; }
+
+/* ---------- Overlay ---------- */
+.overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(10,8,14,0.72); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; transition: opacity 0.2s ease; }
+.overlay.hidden { opacity: 0; pointer-events: none; }
+.overlay-card { background: linear-gradient(160deg, #2C2640, #1D1929); border: 1px solid var(--line); border-radius: 16px; padding: 36px 40px; max-width: 440px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
+.overlay-card h2 { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 26px; color: var(--gold-soft); margin-bottom: 12px; }
+.overlay-card p { font-size: 14px; line-height: 1.55; color: var(--ink-dim); margin-bottom: 24px; }
+
+/* ---------- Confetti ---------- */
+.confetti { position: absolute; width: 7px; height: 7px; border-radius: 2px; pointer-events: none; animation: confettiBurst 0.9s ease-out forwards; }
+@keyframes confettiBurst { to { transform: translate(var(--dx), var(--dy)) rotate(360deg); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) { * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+@media (max-width: 560px) { .stats { gap: 12px; } .ledger-bar { padding: 14px 16px; } }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="ledger-bar">
+    <div class="brand">
+      <div class="brand-name">Rent Racket</div>
+      <div class="brand-sub">a rent-collecting card roguelike — prototype</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="label">Level</span><span class="value" id="levelNum">1</span></div>
+      <div class="stat"><span class="label">Target</span><span class="value" id="targetScore">$0</span></div>
+      <div class="stat highlight"><span class="label">Cash</span><span class="value" id="currentScore">$0</span></div>
+      <div class="stat"><span class="label">Hands</span><span class="value" id="handsLeft">0</span></div>
+      <div class="stat"><span class="label">Auctions</span><span class="value" id="discardsLeft">0</span></div>
+    </div>
+  </header>
+
+  <main class="table">
+    <div class="banner" id="banner"></div>
+    <div class="score-preview" id="scorePreview"></div>
+
+    <div class="hand-area" id="handArea"></div>
+
+    <div class="inspector" id="inspector">
+      <p class="inspector-hint" id="inspectorHint">Tap the ⌂ icon on a card to build houses or mortgage it.</p>
+      <div class="inspector-row is-hidden" id="inspectorRow">
+        <span class="inspector-swatch" id="inspSwatch"></span>
+        <div class="inspector-text">
+          <div class="inspector-name" id="inspName"></div>
+          <div class="inspector-meta" id="inspMeta"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="inspBuildBtn"></button>
+        <button class="btn btn-ghost btn-sm" id="inspMortgageBtn"></button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-ghost" id="discardBtn" disabled>Auction selected</button>
+      <button class="btn btn-primary" id="playBtn" disabled>Collect rent</button>
+    </div>
+    <div class="hint-line">Match colors for bigger multipliers · houses only pay off if that color's monopoly comes up again · mortgage a property for instant cash, but it stops counting toward a set</div>
+  </main>
+
+  <div class="overlay" id="overlay">
+    <div class="overlay-card">
+      <h2 id="overlayTitle">Rent Racket</h2>
+      <p id="overlayText"></p>
+      <button class="btn btn-primary" id="overlayBtn">Start</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ---------- Data ----------
+const COLORS = [
+  { key:'slate',    label:'Slate',    hex:'#5C7C99', tier:0, names:['Foundry Yard','Ironworks Row','Granite Row','Steel Landing'] },
+  { key:'violet',   label:'Violet',   hex:'#7A5CC2', tier:0, names:['Orchid Alley','Lavender Row','Amethyst Ct','Wisteria Walk'] },
+  { key:'amber',    label:'Amber',    hex:'#E0932E', tier:1, names:['Marigold Ave','Saffron Lane','Honeycomb Way','Goldrush Blvd'] },
+  { key:'emerald',  label:'Emerald',  hex:'#3F9463', tier:1, names:['Cypress Court','Fern Hollow','Juniper Row','Willow Bend'] },
+  { key:'ruby',     label:'Ruby',     hex:'#D6453F', tier:2, names:['Ember Street','Crimson Court','Garnet Row','Scarlet Plaza'] },
+  { key:'sapphire', label:'Sapphire', hex:'#3E6FB0', tier:2, names:['Harbor View','Cobalt Pier','Tidewater Ln','Azure Point'] },
+];
+const TIER_RENTS = [ [10,12,14,16], [16,19,22,25], [22,26,30,34] ];
+const TIER_HOUSE_COST = [50, 100, 150];
+const LEVEL_MULT = [0.3, 0.7, 1.2, 2.0]; // house bonus = tier house cost * this, at levels 1-4
+const MORTGAGE_UNDO_MULT = 2; // pay 2x base rent to unmortgage
+const TARGETS = [400, 900];
+const START_HANDS = 4;
+const START_DISCARDS = 3;
+const HAND_SIZE = 8;
+const MAX_SELECT = 5;
+
+function buildPool() {
+  const pool = [];
+  COLORS.forEach(c => {
+    TIER_RENTS[c.tier].forEach((rent, i) => {
+      pool.push({ id: c.key + '-' + i, color: c.key, colorLabel: c.label, hex: c.hex, tier: c.tier, name: c.names[i], rent, houseLevel: 0, mortgaged: false });
+    });
+  });
+  return pool;
+}
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function cloneCards(cards) { return cards.map(c => ({ ...c })); }
+
+// ---------- State ----------
+const state = {
+  level: 0, target: 0, cash: 0,
+  handsLeft: 0, discardsLeft: 0,
+  allCards: [], deck: [], discardPile: [], hand: [],
+  selected: new Set(),
+  inspecting: null,
+  snapshot: null,
+};
+
+function draw(n) {
+  const drawn = [];
+  for (let i = 0; i < n; i++) {
+    if (state.deck.length === 0) {
+      if (state.discardPile.length === 0) break;
+      state.deck = shuffle(state.discardPile);
+      state.discardPile = [];
+    }
+    drawn.push(state.deck.pop());
+  }
+  return drawn;
+}
+
+function takeSnapshot() { state.snapshot = { cash: state.cash, cards: cloneCards(state.allCards) }; }
+function restoreSnapshotInto() { state.allCards = cloneCards(state.snapshot.cards); state.cash = state.snapshot.cash; }
+
+function beginLevel(idx) {
+  state.level = idx;
+  state.target = TARGETS[idx];
+  state.handsLeft = START_HANDS;
+  state.discardsLeft = START_DISCARDS;
+  state.deck = shuffle(state.allCards.slice());
+  state.discardPile = [];
+  state.selected.clear();
+  state.inspecting = null;
+  state.hand = draw(HAND_SIZE);
+  renderAll();
+}
+function startNewRun() {
+  state.allCards = buildPool();
+  state.cash = 0;
+  takeSnapshot();
+  beginLevel(0);
+}
+function advanceToNextLevel() { takeSnapshot(); beginLevel(state.level + 1); }
+function retryLevel() { restoreSnapshotInto(); beginLevel(state.level); }
+
+// ---------- Scoring ----------
+function tierForCount(count) {
+  if (count >= 4) return { mult: 4,   label: 'Landlord Empire!' };
+  if (count === 3) return { mult: 2.5, label: 'Monopoly!' };
+  if (count === 2) return { mult: 1.5, label: 'Pair Deal' };
+  return { mult: 1, label: 'Single Lot' };
+}
+function houseBonusValue(card) {
+  if (card.houseLevel <= 0) return 0;
+  return Math.round(TIER_HOUSE_COST[card.tier] * LEVEL_MULT[card.houseLevel - 1]);
+}
+function computeSelectionStats() {
+  const cards = state.hand.filter(c => state.selected.has(c.id));
+  const counts = {};
+  cards.forEach(c => { if (!c.mortgaged) counts[c.color] = (counts[c.color] || 0) + 1; });
+  const countValues = Object.values(counts);
+  const bestCount = countValues.length ? Math.max(...countValues) : 0;
+  const tier = tierForCount(bestCount);
+  const activeColor = bestCount >= 3 ? Object.keys(counts).find(k => counts[k] === bestCount) : null;
+
+  let baseSum = 0, houseBonus = 0;
+  cards.forEach(c => {
+    baseSum += c.mortgaged ? 0 : c.rent;
+    if (activeColor && c.color === activeColor && !c.mortgaged && c.houseLevel > 0) {
+      houseBonus += houseBonusValue(c);
+    }
+  });
+  const total = Math.round((baseSum + houseBonus) * tier.mult);
+  return { cards, baseSum, houseBonus, bestCount, tier, total, activeColor };
+}
+
+function toggleSelect(id) {
+  if (state.selected.has(id)) { state.selected.delete(id); }
+  else { if (state.selected.size >= MAX_SELECT) return; state.selected.add(id); }
+  renderHand();
+  updatePreviewAndButtons();
+}
+
+function playSelected() {
+  const stats = computeSelectionStats();
+  if (stats.cards.length === 0 || state.handsLeft <= 0) return;
+
+  state.cash += stats.total;
+  state.handsLeft -= 1;
+
+  const playedIds = new Set(stats.cards.map(c => c.id));
+  state.discardPile.push(...stats.cards);
+  state.hand = state.hand.filter(c => !playedIds.has(c.id));
+  state.hand.push(...draw(playedIds.size));
+  state.selected.clear();
+
+  showBanner(stats.tier.label, stats.total, stats.tier.mult >= 2.5);
+  renderAll();
+
+  if (state.cash >= state.target) setTimeout(handleLevelClear, 750);
+  else if (state.handsLeft <= 0) setTimeout(handleBankrupt, 750);
+}
+
+function discardSelected() {
+  if (state.discardsLeft <= 0 || state.selected.size === 0) return;
+  const cards = state.hand.filter(c => state.selected.has(c.id));
+  const ids = new Set(cards.map(c => c.id));
+  state.discardPile.push(...cards);
+  state.hand = state.hand.filter(c => !ids.has(c.id));
+  state.hand.push(...draw(ids.size));
+  state.discardsLeft -= 1;
+  state.selected.clear();
+  renderAll();
+}
+
+function handleLevelClear() {
+  const leftover = state.cash - state.target;
+  const finalTotal = state.cash;
+  state.cash = leftover;
+  if (state.level + 1 < TARGETS.length) {
+    showOverlay('Round cleared!', `You collected $${finalTotal} against a $${state.target} debt. You keep the $${leftover} left over — that carries into the next round.`, 'Next level', advanceToNextLevel);
+  } else {
+    showOverlay('You own the block!', `You collected $${finalTotal}, settled the $${state.target} debt, and walked away with $${leftover}. Every round cleared.`, 'Play again', startNewRun);
+  }
+}
+function handleBankrupt() {
+  showOverlay('Bankrupt!', `You reached $${state.cash} of the $${state.target} target before running out of hands. Any houses or mortgages from this attempt revert.`, 'Try again', retryLevel);
+}
+
+// ---------- Build / Mortgage ----------
+function findInHand(id) { return state.hand.find(c => c.id === id); }
+
+function buildHouse(id) {
+  const card = findInHand(id);
+  if (!card || card.mortgaged || card.houseLevel >= 4) return;
+  const cost = TIER_HOUSE_COST[card.tier];
+  if (state.cash < cost) return;
+  state.cash -= cost;
+  card.houseLevel += 1;
+  const isHotel = card.houseLevel === 4;
+  renderAll();
+  pulseCardBuild(id, isHotel);
+}
+function mortgageCard(id) {
+  const card = findInHand(id);
+  if (!card || card.mortgaged || card.houseLevel > 0) return;
+  state.cash += card.rent;
+  card.mortgaged = true;
+  renderAll();
+}
+function unmortgageCard(id) {
+  const card = findInHand(id);
+  if (!card || !card.mortgaged) return;
+  const cost = Math.round(card.rent * MORTGAGE_UNDO_MULT);
+  if (state.cash < cost) return;
+  state.cash -= cost;
+  card.mortgaged = false;
+  renderAll();
+}
+
+// ---------- Rendering ----------
+function renderAll() { renderStats(); renderHand(); updatePreviewAndButtons(); renderInspector(); }
+
+function renderStats() {
+  document.getElementById('levelNum').textContent = state.level + 1;
+  document.getElementById('targetScore').textContent = '$' + state.target;
+  document.getElementById('currentScore').textContent = '$' + state.cash;
+  document.getElementById('handsLeft').textContent = state.handsLeft;
+  document.getElementById('discardsLeft').textContent = state.discardsLeft;
+}
+
+function houseStripHTML(card) {
+  if (card.mortgaged) return `<div class="card-strip mortgaged-strip"><span class="mort-label">Mortgaged</span></div>`;
+  if (card.houseLevel === 0) return `<div class="card-strip"></div>`;
+  if (card.houseLevel === 4) return `<div class="card-strip"><span class="hotel-icon" title="Hotel"></span></div>`;
+  let houses = '';
+  for (let i = 0; i < card.houseLevel; i++) houses += '<span class="house-icon"></span>';
+  return `<div class="card-strip">${houses}</div>`;
+}
+
+function renderHand() {
+  const area = document.getElementById('handArea');
+  area.innerHTML = '';
+  const n = state.hand.length;
+  const center = (n - 1) / 2;
+
+  state.hand.forEach((card, i) => {
+    const offset = i - center;
+    const rotateDeg = offset * 5;
+    const arc = Math.abs(offset) * 5;
+    const xOffset = offset * 76;
+
+    const slot = document.createElement('div');
+    slot.className = 'card-slot';
+    slot.style.transform = `translateX(${xOffset}px) translateY(${arc}px) rotate(${rotateDeg}deg)`;
+    slot.style.zIndex = i;
+    slot.addEventListener('mouseenter', () => slot.style.zIndex = 100);
+    slot.addEventListener('mouseleave', () => slot.style.zIndex = i);
+
+    const el = document.createElement('div');
+    let cls = 'card';
+    if (state.selected.has(card.id)) cls += ' selected';
+    if (state.inspecting === card.id) cls += ' inspecting';
+    if (card.mortgaged) cls += ' mortgaged';
+    el.className = cls;
+    el.dataset.id = card.id;
+    el.style.setProperty('--band', card.hex);
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-pressed', state.selected.has(card.id) ? 'true' : 'false');
+    el.innerHTML = `
+      <div class="card-band"></div>
+      <div class="card-manage" title="Manage property">&#8962;</div>
+      <div class="card-check">&#10003;</div>
+      <div class="card-rent">$${card.rent}</div>
+      <div class="card-name">${card.name}</div>
+      <div class="card-color">${card.colorLabel}</div>
+      <div class="card-strip-wrap">${houseStripHTML(card)}</div>
+    `;
+    el.addEventListener('click', () => toggleSelect(card.id));
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSelect(card.id); } });
+    el.addEventListener('mousemove', handleTilt);
+    el.addEventListener('mouseleave', resetTilt);
+
+    const manageBtn = el.querySelector('.card-manage');
+    manageBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.inspecting = card.id;
+      renderHand();
+      renderInspector();
+    });
+
+    slot.appendChild(el);
+    area.appendChild(slot);
+  });
+}
+
+function handleTilt(e) {
+  const card = e.currentTarget;
+  const rect = card.getBoundingClientRect();
+  const px = (e.clientX - rect.left) / rect.width;
+  const py = (e.clientY - rect.top) / rect.height;
+  card.style.setProperty('--tiltY', ((px - 0.5) * 24) + 'deg');
+  card.style.setProperty('--tiltX', ((0.5 - py) * 24) + 'deg');
+}
+function resetTilt(e) {
+  const card = e.currentTarget;
+  card.style.setProperty('--tiltX', '0deg');
+  card.style.setProperty('--tiltY', '0deg');
+}
+
+function tierColor(mult) {
+  if (mult >= 2.5) return '#F2C14E';
+  if (mult >= 1.5) return '#9FD8B0';
+  return '#C9C2D6';
+}
+
+function updatePreviewAndButtons() {
+  const stats = computeSelectionStats();
+  const preview = document.getElementById('scorePreview');
+  if (stats.cards.length === 0) {
+    preview.innerHTML = `<span class="preview-hint">Select up to 5 properties to collect rent.</span>`;
+  } else {
+    const bonusText = stats.houseBonus > 0 ? ` + $${stats.houseBonus} houses` : '';
+    preview.innerHTML = `<span class="preview-tier" style="color:${tierColor(stats.tier.mult)}">${stats.tier.label}</span>
+      <span class="preview-math">$${stats.baseSum}${bonusText} &times; ${stats.tier.mult} = <strong>$${stats.total}</strong></span>`;
+  }
+  document.getElementById('playBtn').disabled = stats.cards.length === 0 || state.handsLeft <= 0;
+  document.getElementById('discardBtn').disabled = stats.cards.length === 0 || state.discardsLeft <= 0;
+}
+
+function renderInspector() {
+  const card = state.inspecting ? findInHand(state.inspecting) : null;
+  const hint = document.getElementById('inspectorHint');
+  const row = document.getElementById('inspectorRow');
+  if (!card) {
+    state.inspecting = null;
+    hint.classList.remove('is-hidden');
+    row.classList.add('is-hidden');
+    return;
+  }
+  hint.classList.add('is-hidden');
+  row.classList.remove('is-hidden');
+
+  document.getElementById('inspSwatch').style.background = card.hex;
+  document.getElementById('inspName').textContent = card.name;
+  const levelLabel = card.houseLevel === 4 ? 'Hotel' : card.houseLevel > 0 ? (card.houseLevel + (card.houseLevel === 1 ? ' house' : ' houses')) : 'No houses';
+  document.getElementById('inspMeta').textContent = `${card.colorLabel} · Rent $${card.rent} · ${card.mortgaged ? 'Mortgaged' : levelLabel}`;
+
+  const buildBtn = document.getElementById('inspBuildBtn');
+  const mortBtn = document.getElementById('inspMortgageBtn');
+
+  if (card.mortgaged) {
+    buildBtn.textContent = 'Build unavailable';
+    buildBtn.disabled = true;
+    buildBtn.onclick = null;
+    const cost = Math.round(card.rent * MORTGAGE_UNDO_MULT);
+    mortBtn.textContent = `Unmortgage — $${cost}`;
+    mortBtn.disabled = state.cash < cost;
+    mortBtn.onclick = () => unmortgageCard(card.id);
+  } else if (card.houseLevel >= 4) {
+    buildBtn.textContent = 'Hotel built';
+    buildBtn.disabled = true;
+    buildBtn.onclick = null;
+    mortBtn.textContent = 'Sell houses first';
+    mortBtn.disabled = true;
+    mortBtn.onclick = null;
+  } else {
+    const cost = TIER_HOUSE_COST[card.tier];
+    buildBtn.textContent = card.houseLevel === 3 ? `Build hotel — $${cost}` : `Build house — $${cost}`;
+    buildBtn.disabled = state.cash < cost;
+    buildBtn.onclick = () => buildHouse(card.id);
+
+    if (card.houseLevel > 0) {
+      mortBtn.textContent = 'Sell houses first';
+      mortBtn.disabled = true;
+      mortBtn.onclick = null;
+    } else {
+      mortBtn.textContent = `Mortgage — +$${card.rent}`;
+      mortBtn.disabled = false;
+      mortBtn.onclick = () => mortgageCard(card.id);
+    }
+  }
+}
+
+function showBanner(label, amount, big) {
+  const banner = document.getElementById('banner');
+  banner.classList.remove('pop');
+  banner.innerHTML = `<span class="banner-label">${label}</span><span class="banner-amt">+$${amount}</span>`;
+  void banner.offsetWidth;
+  banner.classList.add('pop');
+  if (big) spawnConfetti();
+}
+
+function pulseCardBuild(id, isHotel) {
+  const el = document.querySelector('.card[data-id="' + id + '"]');
+  if (!el) return;
+  el.classList.remove('built-pulse', 'hotel-pulse');
+  void el.offsetWidth;
+  el.classList.add(isHotel ? 'hotel-pulse' : 'built-pulse');
+  if (isHotel) spawnConfetti();
+}
+
+function spawnConfetti() {
+  const colors = COLORS.map(c => c.hex);
+  const layer = document.getElementById('app');
+  for (let i = 0; i < 18; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti';
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 80 + Math.random() * 150;
+    p.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    p.style.setProperty('--dy', (Math.sin(angle) * dist - 50) + 'px');
+    p.style.background = colors[Math.floor(Math.random() * colors.length)];
+    p.style.left = '50%';
+    p.style.top = '30%';
+    layer.appendChild(p);
+    setTimeout(() => p.remove(), 950);
+  }
+}
+
+// ---------- Overlay ----------
+function showOverlay(title, text, btnLabel, onClick) {
+  document.getElementById('overlayTitle').textContent = title;
+  document.getElementById('overlayText').textContent = text;
+  const btn = document.getElementById('overlayBtn');
+  btn.textContent = btnLabel;
+  btn.onclick = () => { hideOverlay(); onClick(); };
+  document.getElementById('overlay').classList.remove('hidden');
+}
+function hideOverlay() { document.getElementById('overlay').classList.add('hidden'); }
+
+// ---------- Init ----------
+document.getElementById('playBtn').addEventListener('click', playSelected);
+document.getElementById('discardBtn').addEventListener('click', discardSelected);
+
+showOverlay(
+  'Rent Racket',
+  'Play 1–5 properties per hand to collect rent toward the target. Match colors for bigger multipliers. Tap the ⌂ icon on any card in your hand to build houses — they only pay off if that color\u2019s monopoly comes up again — or mortgage a property for instant cash. Only the cash left over after you hit the target carries into the next round.',
+  'Start',
+  startNewRun
+);
+</script>
+</body>
+</html>
